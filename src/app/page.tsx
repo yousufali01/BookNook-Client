@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -36,8 +35,7 @@ interface BooksResponse {
    API CONFIGURATION
 ========================================= */
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 /* =========================================
    HERO SLIDER DATA
@@ -109,14 +107,10 @@ export default function Home() {
         setLoading(true);
         setError("");
 
-        const response = await fetch(
-          `${API_BASE_URL}/api/books?limit=6`
-        );
+        const response = await fetch(`${API_BASE_URL}/api/books?limit=6`);
 
         if (!response.ok) {
-          throw new Error(
-            `Books API failed: ${response.status}`
-          );
+          throw new Error(`Books API failed: ${response.status}`);
         }
 
         const result: BooksResponse = await response.json();
@@ -129,9 +123,7 @@ export default function Home() {
       } catch (error) {
         console.error("Books API Error:", error);
 
-        setError(
-          "Books could not be loaded. Please try again later."
-        );
+        setError("Books could not be loaded. Please try again later.");
       } finally {
         setLoading(false);
       }
@@ -142,7 +134,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white text-slate-800">
-
       {/* =====================================
           HERO SLIDER
       ===================================== */}
@@ -213,7 +204,6 @@ export default function Home() {
       ===================================== */}
 
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-
         <div className="mb-10 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
             <span className="mb-3 block text-sm font-bold uppercase tracking-[0.2em] text-emerald-600">
@@ -225,8 +215,8 @@ export default function Home() {
             </h2>
 
             <p className="mt-3 max-w-xl text-slate-500">
-              Explore the latest additions to our collection and find your
-              next favorite book.
+              Explore the latest additions to our collection and find your next
+              favorite book.
             </p>
           </div>
 
@@ -252,15 +242,11 @@ export default function Home() {
           </div>
         ) : error ? (
           <div className="rounded-2xl bg-red-50 px-6 py-12 text-center">
-            <p className="font-medium text-red-600">
-              {error}
-            </p>
+            <p className="font-medium text-red-600">{error}</p>
           </div>
         ) : books.length === 0 ? (
           <div className="rounded-2xl bg-slate-50 px-6 py-12 text-center">
-            <p className="text-slate-500">
-              No books available at the moment.
-            </p>
+            <p className="text-slate-500">No books available at the moment.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -271,10 +257,7 @@ export default function Home() {
               >
                 <div className="relative h-64 overflow-hidden bg-slate-100">
                   <img
-                    src={
-                      book.image ||
-                      "https://placehold.co/400x600?text=Book"
-                    }
+                    src={book.image || "https://placehold.co/400x600?text=Book"}
                     alt={book.title}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                   />
@@ -325,7 +308,6 @@ export default function Home() {
 
       <section className="bg-slate-50 py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-
           <div className="mx-auto mb-14 max-w-2xl text-center">
             <span className="mb-3 block text-sm font-bold uppercase tracking-[0.2em] text-emerald-600">
               Simple & Easy
@@ -381,9 +363,7 @@ export default function Home() {
                   {step.title}
                 </h3>
 
-                <p className="leading-7 text-slate-500">
-                  {step.description}
-                </p>
+                <p className="leading-7 text-slate-500">{step.description}</p>
               </div>
             ))}
           </div>
@@ -395,7 +375,6 @@ export default function Home() {
       ===================================== */}
 
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
-
         <div className="mb-10 text-center">
           <span className="mb-3 block text-sm font-bold uppercase tracking-[0.2em] text-emerald-600">
             Find Your Interest
@@ -421,9 +400,7 @@ export default function Home() {
                 {category.icon}
               </span>
 
-              <h3 className="font-bold text-slate-800">
-                {category.name}
-              </h3>
+              <h3 className="font-bold text-slate-800">{category.name}</h3>
 
               <span className="mt-2 text-xs font-medium text-slate-500 transition group-hover:text-emerald-700">
                 Explore →
@@ -439,18 +416,15 @@ export default function Home() {
 
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
         <div className="overflow-hidden rounded-3xl bg-emerald-950 px-7 py-14 text-center text-white sm:px-12">
-
-          <span className="mb-4 block text-4xl">
-            📚
-          </span>
+          <span className="mb-4 block text-4xl">📚</span>
 
           <h2 className="text-3xl font-bold sm:text-4xl">
             Ready to Find Your Next Favorite Book?
           </h2>
 
           <p className="mx-auto mt-4 max-w-2xl leading-7 text-emerald-100/80">
-            Explore our library, discover interesting stories, and make
-            reading a part of your everyday life.
+            Explore our library, discover interesting stories, and make reading
+            a part of your everyday life.
           </p>
 
           <Link
@@ -461,7 +435,6 @@ export default function Home() {
           </Link>
         </div>
       </section>
-
     </div>
   );
 }
