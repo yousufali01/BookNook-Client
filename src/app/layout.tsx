@@ -1,4 +1,3 @@
-
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -24,9 +23,7 @@ export default function RootLayout({
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-800 antialiased">
         <Navbar />
 
-        <main className="flex-1">
-          {children}
-        </main>
+        <main className="flex-1">{children}</main>
 
         <Footer />
       </body>

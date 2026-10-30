@@ -1,4 +1,3 @@
-
 import Link from "next/link";
 import {
   BookOpen,
@@ -58,7 +57,6 @@ export default function Footer() {
     <footer className="mt-auto bg-slate-950 text-slate-300">
       <div className="mx-auto max-w-7xl px-4 pb-12 pt-16 sm:px-6 lg:px-8">
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
-
           {/* Brand */}
           <div>
             <Link href="/" className="inline-flex items-center gap-3">
@@ -72,9 +70,9 @@ export default function Footer() {
             </Link>
 
             <p className="mt-5 max-w-xs text-sm leading-7 text-slate-400">
-              Your little corner of knowledge. Discover amazing books,
-              organize your personal collection, and enjoy a better
-              reading experience with BookNook.
+              Your little corner of knowledge. Discover amazing books, organize
+              your personal collection, and enjoy a better reading experience
+              with BookNook.
             </p>
 
             {/* Social Media Icons */}
@@ -101,9 +99,7 @@ export default function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h3 className="mb-6 text-base font-bold text-white">
-              Quick Links
-            </h3>
+            <h3 className="mb-6 text-base font-bold text-white">Quick Links</h3>
 
             <ul className="space-y-4">
               {quickLinks.map((link) => (
@@ -125,9 +121,7 @@ export default function Footer() {
 
           {/* Explore */}
           <div>
-            <h3 className="mb-6 text-base font-bold text-white">
-              Explore
-            </h3>
+            <h3 className="mb-6 text-base font-bold text-white">Explore</h3>
 
             <ul className="space-y-4">
               {supportLinks.map((link) => (
@@ -179,10 +173,11 @@ export default function Footer() {
               </li>
 
               <li className="flex items-start gap-3">
-                <MapPin size={18} className="mt-0.5 shrink-0 text-emerald-400" />
-                <span className="text-sm text-slate-400">
-                  Bangladesh
-                </span>
+                <MapPin
+                  size={18}
+                  className="mt-0.5 shrink-0 text-emerald-400"
+                />
+                <span className="text-sm text-slate-400">Bangladesh</span>
               </li>
             </ul>
           </div>
@@ -193,15 +188,12 @@ export default function Footer() {
       <div className="border-t border-slate-800">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-center sm:flex-row sm:px-6 lg:px-8">
           <p className="text-xs text-slate-500">
-            © {new Date().getFullYear()} BookNook. All rights reserved.
+            © 2026 BookNook. All rights reserved.
           </p>
 
           <p className="flex items-center gap-1.5 text-xs text-slate-500">
             Made with
-            <Heart
-              size={13}
-              className="fill-emerald-500 text-emerald-500"
-            />
+            <Heart size={13} className="fill-emerald-500 text-emerald-500" />
             for book lovers.
           </p>
         </div>

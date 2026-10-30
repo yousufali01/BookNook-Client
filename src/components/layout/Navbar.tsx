@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -97,7 +96,7 @@ export default function Navbar() {
   };
 
   const renderLink = (
-    link: (typeof publicLinks)[number] | (typeof privateLinks)[number]
+    link: (typeof publicLinks)[number] | (typeof privateLinks)[number],
   ) => {
     const Icon = link.icon;
     const active = isActive(link.href);
@@ -123,7 +122,6 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-[76px] items-center justify-between gap-4">
-
           {/* Logo */}
           <Link
             href="/"
