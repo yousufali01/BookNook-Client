@@ -174,9 +174,12 @@ function LoginForm() {
 
         <p className="mt-6 text-center text-sm text-slate-600">
           Don&apos;t have an account?{" "}
-          <span className="font-semibold text-indigo-600">
-            Registration coming next
-          </span>
+          <Link
+            href="/register"
+            className="font-semibold text-indigo-600 hover:text-indigo-700"
+          >
+            Register
+          </Link>
         </p>
 
         <div className="mt-6 text-center">
