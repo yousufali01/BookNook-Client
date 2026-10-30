@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -39,8 +38,7 @@ export default function BooksPage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] =
-    useState("All Categories");
+  const [selectedCategory, setSelectedCategory] = useState("All Categories");
 
   const fetchBooks = async () => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -154,10 +152,7 @@ export default function BooksPage() {
             disabled={loading}
             className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
           >
-            <RefreshCw
-              size={17}
-              className={loading ? "animate-spin" : ""}
-            />
+            <RefreshCw size={17} className={loading ? "animate-spin" : ""} />
             Refresh
           </button>
         </div>
@@ -165,10 +160,7 @@ export default function BooksPage() {
         {/* Loading */}
         {loading ? (
           <div className="flex min-h-[40vh] flex-col items-center justify-center">
-            <Loader2
-              size={38}
-              className="animate-spin text-emerald-600"
-            />
+            <Loader2 size={38} className="animate-spin text-emerald-600" />
             <p className="mt-4 text-sm font-medium text-slate-500">
               Loading books...
             </p>

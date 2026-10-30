@@ -1,24 +1,22 @@
-
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { authClient } from "@/lib/auth-client";
 import {
   BookOpen,
-  Loader2,
   Pencil,
   Trash2,
   X,
+  Loader2,
   Save,
-  UserRound,
-  RefreshCw,
-  BookX,
+  AlertCircle,
 } from "lucide-react";
 
-type Book = {
+import { authClient } from "@/lib/auth-client";
+
+interface Book {
   _id: string;
   title: string;
   author: string;
@@ -28,369 +26,314 @@ type Book = {
   addedByName?: string;
   addedByEmail?: string;
   createdAt?: string;
-};
+}
 
-type EditForm = {
+interface EditForm {
   title: string;
   author: string;
   category: string;
   image: string;
   description: string;
-};
+}
 
 const categories = ["Fiction", "Science", "History", "Kids", "Others"];
 
-const initialForm: EditForm = {
-  title: "",
-  author: "",
-  category: "",
-  image: "",
-  description: "",
+const baseUrl = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
+// Get JWT token from BetterAuth
+const getAuthHeaders = async () => {
+  const { data, error } = await authClient.token();
+
+  if (error || !data?.token) {
+    throw new Error(
+      error?.message || "Authentication token not found. Please login again.",
+    );
+  }
+
+  return {
+    Authorization: `Bearer ${data.token}`,
+  };
 };
 
 export default function MyBooksPage() {
   const router = useRouter();
 
   const { data: session, isPending } = authClient.useSession();
-  const user = session?.user;
-  const userEmail = user?.email;
 
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [deletingBook, setDeletingBook] = useState<Book | null>(null);
-  const [formData, setFormData] = useState<EditForm>(initialForm);
 
-  // Redirect if user is not logged in
+  const [editForm, setEditForm] = useState<EditForm>({
+    title: "",
+    author: "",
+    category: "Fiction",
+    image: "",
+    description: "",
+  });
+
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const userEmail = session?.user?.email;
+
+  // Fetch only the logged-in user's books
   useEffect(() => {
-    if (!isPending && !userEmail) {
+    if (isPending) return;
+
+    if (!userEmail) {
       router.replace("/login?redirect=/my-books");
-    }
-  }, [isPending, userEmail, router]);
-
-  // Fetch logged-in user's books
-  const fetchMyBooks = useCallback(async () => {
-    if (!userEmail) return;
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiUrl) {
-      toast.error("Backend API URL is missing.");
-      setLoading(false);
       return;
     }
 
-    try {
-      setLoading(true);
+    const fetchMyBooks = async () => {
+      try {
+        setLoading(true);
 
-      const baseUrl = apiUrl.replace(/\/+$/, "");
+        const headers = await getAuthHeaders();
 
-      const response = await axios.get(
-        `${baseUrl}/api/my-books`,
-        {
-          params: {
-            email: userEmail,
-          },
+        const response = await axios.get(`${baseUrl}/api/my-books`, {
+          headers,
+        });
+
+        if (response.data?.success) {
+          setBooks(response.data.data || []);
+        } else {
+          setBooks([]);
+          toast.error(response.data?.message || "Could not load your books.");
         }
-      );
+      } catch (error) {
+        console.error("Fetch My Books Error:", error);
 
-      if (response.data?.success) {
-        const bookList = response.data.data;
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          toast.error("Your session has expired. Please login again.");
+          router.replace("/login?redirect=/my-books");
+          return;
+        }
 
-        setBooks(Array.isArray(bookList) ? bookList : []);
-      } else {
-        throw new Error(
-          response.data?.message || "Failed to load your books."
-        );
-      }
-    } catch (error) {
-      console.error("Fetch My Books Error:", error);
-
-      if (axios.isAxiosError(error)) {
         toast.error(
-          error.response?.data?.message || "Failed to load your books."
+          error instanceof Error ? error.message : "Failed to load books.",
         );
-      } else if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Something went wrong.");
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setBooks([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [userEmail]);
-
-  useEffect(() => {
-    if (!isPending && userEmail) {
-      fetchMyBooks();
-    }
-  }, [isPending, userEmail, fetchMyBooks]);
+    fetchMyBooks();
+  }, [userEmail, isPending, router]);
 
   // Open edit modal
-  const openEditModal = (book: Book) => {
+  const handleEditClick = (book: Book) => {
     setEditingBook(book);
 
-    setFormData({
+    setEditForm({
       title: book.title || "",
       author: book.author || "",
-      category: book.category || "",
+      category: book.category || "Fiction",
       image: book.image || "",
       description: book.description || "",
     });
   };
 
-  // Close edit modal
-  const closeEditModal = () => {
-    if (saving) return;
-
-    setEditingBook(null);
-    setFormData(initialForm);
-  };
-
-  // Handle form changes
+  // Update form values
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
 
-    setFormData((previous) => ({
+    setEditForm((previous) => ({
       ...previous,
       [name]: value,
     }));
   };
 
   // Update book
-  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleUpdateBook = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (!editingBook || !userEmail) return;
+    if (!editingBook) return;
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiUrl) {
-      toast.error("Backend API URL is missing.");
+    if (
+      !editForm.title.trim() ||
+      !editForm.author.trim() ||
+      !editForm.image.trim() ||
+      !editForm.description.trim()
+    ) {
+      toast.error("Please fill in all fields.");
       return;
     }
 
-    // Validate image URL
-    try {
-      const parsedUrl = new URL(formData.image.trim());
-
-      if (parsedUrl.protocol !== "https:") {
-        toast.error("Please enter a valid HTTPS image URL.");
-        return;
-      }
-    } catch {
-      toast.error("Please enter a valid image URL.");
+    if (!/^https:\/\/.+/i.test(editForm.image.trim())) {
+      toast.error("Please enter a valid HTTPS image URL.");
       return;
     }
 
     try {
       setSaving(true);
 
-      const baseUrl = apiUrl.replace(/\/+$/, "");
+      const headers = await getAuthHeaders();
 
       const response = await axios.put(
         `${baseUrl}/api/books/${editingBook._id}`,
         {
-          title: formData.title.trim(),
-          author: formData.author.trim(),
-          category: formData.category,
-          image: formData.image.trim(),
-          description: formData.description.trim(),
-
-          // Backend ownership validation requires this field
-          addedByEmail: userEmail,
-        }
+          title: editForm.title.trim(),
+          author: editForm.author.trim(),
+          category: editForm.category,
+          image: editForm.image.trim(),
+          description: editForm.description.trim(),
+        },
+        { headers },
       );
 
       if (response.data?.success) {
-        toast.success("Book updated successfully!");
+        const updatedBook = response.data.data;
 
-        setEditingBook(null);
-        setFormData(initialForm);
-
-        await fetchMyBooks();
-      } else {
-        throw new Error(
-          response.data?.message || "Failed to update book."
+        setBooks((previous) =>
+          previous.map((book) =>
+            book._id === editingBook._id ? { ...book, ...updatedBook } : book,
+          ),
         );
+
+        toast.success("Book updated successfully!");
+        setEditingBook(null);
+      } else {
+        toast.error(response.data?.message || "Failed to update book.");
       }
     } catch (error) {
       console.error("Update Book Error:", error);
 
-      if (axios.isAxiosError(error)) {
-        toast.error(
-          error.response?.data?.message || "Failed to update book."
-        );
-      } else if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Something went wrong.");
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        toast.error("Your session has expired. Please login again.");
+        router.replace("/login?redirect=/my-books");
+        return;
       }
+
+      toast.error(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message || "Failed to update book."
+          : error instanceof Error
+            ? error.message
+            : "Something went wrong.",
+      );
     } finally {
       setSaving(false);
     }
   };
 
   // Delete book
-  const handleDelete = async () => {
-    if (!deletingBook || !userEmail) return;
-
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiUrl) {
-      toast.error("Backend API URL is missing.");
-      return;
-    }
+  const handleDeleteBook = async () => {
+    if (!deletingBook) return;
 
     try {
       setDeleting(true);
 
-      const baseUrl = apiUrl.replace(/\/+$/, "");
+      const headers = await getAuthHeaders();
 
       const response = await axios.delete(
         `${baseUrl}/api/books/${deletingBook._id}`,
-        {
-          params: {
-            email: userEmail,
-          },
-        }
+        { headers },
       );
 
       if (response.data?.success) {
-        toast.success("Book deleted successfully!");
-
         setBooks((previous) =>
-          previous.filter((book) => book._id !== deletingBook._id)
+          previous.filter((book) => book._id !== deletingBook._id),
         );
 
+        toast.success("Book deleted successfully!");
         setDeletingBook(null);
       } else {
-        throw new Error(
-          response.data?.message || "Failed to delete book."
-        );
+        toast.error(response.data?.message || "Failed to delete book.");
       }
     } catch (error) {
       console.error("Delete Book Error:", error);
 
-      if (axios.isAxiosError(error)) {
-        toast.error(
-          error.response?.data?.message || "Failed to delete book."
-        );
-      } else if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Something went wrong.");
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        toast.error("Your session has expired. Please login again.");
+        router.replace("/login?redirect=/my-books");
+        return;
       }
+
+      toast.error(
+        axios.isAxiosError(error)
+          ? error.response?.data?.message || "Failed to delete book."
+          : error instanceof Error
+            ? error.message
+            : "Something went wrong.",
+      );
     } finally {
       setDeleting(false);
     }
   };
 
-  // Loading and authentication state
-  if (isPending || !userEmail) {
+  // Loading state
+  if (isPending || loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2
-          size={38}
-          className="animate-spin text-emerald-600"
-        />
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+          <p className="text-sm font-medium text-gray-500">
+            Loading your books...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <section className="min-h-screen bg-slate-50 px-4 py-12 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-
-        {/* Heading */}
-        <div className="mb-10 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-            <BookOpen size={32} />
-          </div>
-
-          <h1 className="text-3xl font-extrabold text-slate-900 sm:text-4xl">
-            My Books
-          </h1>
-
-          <p className="mt-3 text-sm text-slate-500 sm:text-base">
-            Manage the books you have shared with the BookNook community.
-          </p>
-
-          <p className="mt-3 text-sm font-semibold text-emerald-700">
-            {books.length} Books Added
-          </p>
-        </div>
-
-        {/* User Information */}
-        <div className="mb-8 flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-emerald-700">
-              <UserRound size={22} />
+        {/* Page Heading */}
+        <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-emerald-600">
+              <BookOpen size={22} />
+              <span className="text-sm font-semibold uppercase tracking-wider">
+                BookNook Library
+              </span>
             </div>
 
-            <div>
-              <p className="text-sm font-bold text-slate-800">
-                {user?.name || "BookNook User"}
-              </p>
+            <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+              My Books
+            </h1>
 
-              <p className="text-xs text-slate-500">
-                {userEmail}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={fetchMyBooks}
-            disabled={loading}
-            className="flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60"
-          >
-            <RefreshCw
-              size={16}
-              className={loading ? "animate-spin" : ""}
-            />
-            Refresh Books
-          </button>
-        </div>
-
-        {/* Loading */}
-        {loading ? (
-          <div className="flex min-h-[35vh] flex-col items-center justify-center">
-            <Loader2
-              size={38}
-              className="animate-spin text-emerald-600"
-            />
-
-            <p className="mt-4 text-sm text-slate-500">
-              Loading your books...
+            <p className="mt-2 text-gray-500">
+              Manage the books you have added to BookNook.
             </p>
           </div>
-        ) : books.length === 0 ? (
-          /* Empty State */
-          <div className="flex min-h-[35vh] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-4 text-center">
-            <BookX size={50} className="text-slate-300" />
 
-            <h2 className="mt-4 text-xl font-bold text-slate-800">
-              You Haven&apos;t Added Any Books
+          <div className="flex w-fit items-center gap-2 rounded-xl border border-emerald-100 bg-white px-5 py-3 shadow-sm">
+            <BookOpen className="text-emerald-600" size={20} />
+            <span className="font-semibold text-gray-700">
+              {books.length} {books.length === 1 ? "Book" : "Books"}
+            </span>
+          </div>
+        </div>
+
+        {/* Empty State */}
+        {books.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-20 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+              <BookOpen size={30} className="text-emerald-600" />
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-800">
+              No Books Added Yet
             </h2>
 
-            <p className="mt-2 text-sm text-slate-500">
-              Add your first book and share it with the community.
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+              You have not added any books to the library yet. Add your first
+              book and manage it from here.
             </p>
 
             <button
-              type="button"
               onClick={() => router.push("/add-book")}
-              className="mt-6 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+              className="mt-6 rounded-lg bg-emerald-600 px-6 py-3 font-semibold text-white transition hover:bg-emerald-700"
             >
               Add Your First Book
             </button>
@@ -399,152 +342,134 @@ export default function MyBooksPage() {
           /* Books Grid */
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {books.map((book) => (
-              <div
+              <article
                 key={book._id}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+                className="group overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
               >
-                <div className="relative flex h-60 items-center justify-center bg-slate-100 p-4">
+                <div className="relative h-64 overflow-hidden bg-gray-100">
                   <img
                     src={book.image}
                     alt={book.title}
-                    className="h-full w-full rounded-xl object-contain"
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    onError={(e) => {
+                      e.currentTarget.src =
+                        "https://placehold.co/600x800?text=Book+Image";
+                    }}
                   />
 
-                  <span className="absolute left-4 top-4 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white">
+                  <span className="absolute left-4 top-4 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow">
                     {book.category}
                   </span>
                 </div>
 
                 <div className="p-5">
-                  <h2 className="line-clamp-1 text-xl font-bold text-slate-900">
+                  <h2 className="line-clamp-1 text-xl font-bold text-gray-900">
                     {book.title}
                   </h2>
 
-                  <p className="mt-2 text-sm text-slate-500">
-                    By{" "}
-                    <span className="font-semibold text-slate-700">
-                      {book.author}
-                    </span>
-                  </p>
+                  <p className="mt-1 text-sm text-gray-500">By {book.author}</p>
 
-                  <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-6 text-slate-500">
+                  <p className="mt-4 line-clamp-3 min-h-[60px] text-sm leading-6 text-gray-600">
                     {book.description}
                   </p>
 
-                  <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div className="mt-5 flex gap-3 border-t border-gray-100 pt-4">
                     <button
-                      type="button"
-                      onClick={() => openEditModal(book)}
-                      className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-3 text-sm font-bold text-white transition hover:bg-emerald-700"
+                      onClick={() => handleEditClick(book)}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-emerald-600 px-3 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
                     >
                       <Pencil size={16} />
                       Edit
                     </button>
 
                     <button
-                      type="button"
                       onClick={() => setDeletingBook(book)}
-                      className="flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm font-bold text-red-600 transition hover:bg-red-100"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-red-200 px-3 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
                     >
                       <Trash2 size={16} />
                       Delete
                     </button>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
       </div>
 
-      {/* Edit Modal */}
+      {/* Edit Book Modal */}
       {editingBook && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm"
-          onClick={closeEditModal}
-        >
-          <div
-            className="my-auto w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-6 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="my-8 w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
               <div>
-                <h2 className="text-2xl font-extrabold text-slate-900">
-                  Edit Book
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
+                <h2 className="text-xl font-bold text-gray-900">Edit Book</h2>
+                <p className="mt-1 text-sm text-gray-500">
                   Update your book information.
                 </p>
               </div>
 
               <button
-                type="button"
-                onClick={closeEditModal}
+                onClick={() => setEditingBook(null)}
                 disabled={saving}
-                className="rounded-xl bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
+                className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
+                aria-label="Close edit modal"
               >
-                <X size={20} />
+                <X size={22} />
               </button>
             </div>
 
-            <form onSubmit={handleUpdate} className="space-y-5">
+            <form onSubmit={handleUpdateBook} className="space-y-4 p-6">
               <div>
                 <label
-                  htmlFor="edit-title"
-                  className="mb-2 block text-sm font-semibold text-slate-700"
+                  htmlFor="title"
+                  className="mb-1.5 block text-sm font-semibold text-gray-700"
                 >
                   Book Title
                 </label>
-
                 <input
-                  id="edit-title"
+                  id="title"
                   name="title"
-                  value={formData.title}
+                  type="text"
+                  value={editForm.title}
                   onChange={handleInputChange}
                   required
-                  maxLength={150}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
               </div>
 
               <div>
                 <label
-                  htmlFor="edit-author"
-                  className="mb-2 block text-sm font-semibold text-slate-700"
+                  htmlFor="author"
+                  className="mb-1.5 block text-sm font-semibold text-gray-700"
                 >
-                  Author Name
+                  Author
                 </label>
-
                 <input
-                  id="edit-author"
+                  id="author"
                   name="author"
-                  value={formData.author}
+                  type="text"
+                  value={editForm.author}
                   onChange={handleInputChange}
                   required
-                  maxLength={100}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
               </div>
 
               <div>
                 <label
-                  htmlFor="edit-category"
-                  className="mb-2 block text-sm font-semibold text-slate-700"
+                  htmlFor="category"
+                  className="mb-1.5 block text-sm font-semibold text-gray-700"
                 >
                   Category
                 </label>
-
                 <select
-                  id="edit-category"
+                  id="category"
                   name="category"
-                  value={formData.category}
+                  value={editForm.category}
                   onChange={handleInputChange}
-                  required
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 >
-                  <option value="">Select a category</option>
-
                   {categories.map((category) => (
                     <option key={category} value={category}>
                       {category}
@@ -555,63 +480,57 @@ export default function MyBooksPage() {
 
               <div>
                 <label
-                  htmlFor="edit-image"
-                  className="mb-2 block text-sm font-semibold text-slate-700"
+                  htmlFor="image"
+                  className="mb-1.5 block text-sm font-semibold text-gray-700"
                 >
                   Book Image URL
                 </label>
-
                 <input
-                  id="edit-image"
+                  id="image"
                   name="image"
                   type="url"
-                  value={formData.image}
+                  value={editForm.image}
                   onChange={handleInputChange}
                   required
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                  placeholder="https://example.com/book-image.jpg"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
               </div>
 
-              {formData.image.trim() && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="mb-2 text-xs font-semibold text-emerald-700">
-                    Image Preview
-                  </p>
-
+              {editForm.image && (
+                <div className="overflow-hidden rounded-lg border border-gray-200">
                   <img
-                    src={formData.image}
+                    src={editForm.image}
                     alt="Book preview"
-                    className="mx-auto max-h-40 rounded-lg object-contain"
+                    className="h-40 w-full object-contain"
                   />
                 </div>
               )}
 
               <div>
                 <label
-                  htmlFor="edit-description"
-                  className="mb-2 block text-sm font-semibold text-slate-700"
+                  htmlFor="description"
+                  className="mb-1.5 block text-sm font-semibold text-gray-700"
                 >
-                  Short Description
+                  Description
                 </label>
-
                 <textarea
-                  id="edit-description"
+                  id="description"
                   name="description"
-                  value={formData.description}
+                  value={editForm.description}
                   onChange={handleInputChange}
                   required
-                  maxLength={1000}
                   rows={4}
-                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                  className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3 text-gray-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
               </div>
 
-              <div className="flex flex-col-reverse gap-3 sm:flex-row">
+              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  onClick={closeEditModal}
+                  onClick={() => setEditingBook(null)}
                   disabled={saving}
-                  className="flex-1 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                  className="rounded-lg border border-gray-300 px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -619,16 +538,16 @@ export default function MyBooksPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                  className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? (
                     <>
-                      <Loader2 size={17} className="animate-spin" />
-                      Updating...
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
                     </>
                   ) : (
                     <>
-                      <Save size={17} />
+                      <Save size={18} />
                       Save Changes
                     </>
                   )}
@@ -641,27 +560,19 @@ export default function MyBooksPage() {
 
       {/* Delete Confirmation Modal */}
       {deletingBook && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-          onClick={() => {
-            if (!deleting) setDeletingBook(null);
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-3xl bg-white p-7 text-center shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-100 text-red-600">
-              <Trash2 size={30} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
+              <AlertCircle size={28} className="text-red-600" />
             </div>
 
-            <h2 className="mt-5 text-2xl font-extrabold text-slate-900">
+            <h2 className="text-center text-xl font-bold text-gray-900">
               Delete This Book?
             </h2>
 
-            <p className="mt-3 text-sm leading-6 text-slate-500">
+            <p className="mt-2 text-center text-sm leading-6 text-gray-500">
               Are you sure you want to delete{" "}
-              <span className="font-bold text-slate-800">
+              <span className="font-semibold text-gray-800">
                 {deletingBook.title}
               </span>
               ? This action cannot be undone.
@@ -669,29 +580,27 @@ export default function MyBooksPage() {
 
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row">
               <button
-                type="button"
                 onClick={() => setDeletingBook(null)}
                 disabled={deleting}
-                className="flex-1 rounded-xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-3 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
 
               <button
-                type="button"
-                onClick={handleDelete}
+                onClick={handleDeleteBook}
                 disabled={deleting}
-                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-60"
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-3 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {deleting ? (
                   <>
-                    <Loader2 size={17} className="animate-spin" />
+                    <Loader2 size={18} className="animate-spin" />
                     Deleting...
                   </>
                 ) : (
                   <>
-                    <Trash2 size={17} />
-                    Yes, Delete
+                    <Trash2 size={18} />
+                    Delete Book
                   </>
                 )}
               </button>
@@ -699,6 +608,6 @@ export default function MyBooksPage() {
           </div>
         </div>
       )}
-    </section>
+    </main>
   );
 }

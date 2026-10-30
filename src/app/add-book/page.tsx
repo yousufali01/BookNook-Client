@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
@@ -17,6 +16,25 @@ import {
 
 const categories = ["Fiction", "Science", "History", "Kids", "Others"];
 
+const baseUrl = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+).replace(/\/+$/, "");
+
+// Get JWT token from BetterAuth
+const getAuthHeaders = async () => {
+  const { data, error } = await authClient.token();
+
+  if (error || !data?.token) {
+    throw new Error(
+      error?.message || "Authentication token not found. Please login again.",
+    );
+  }
+
+  return {
+    Authorization: `Bearer ${data.token}`,
+  };
+};
+
 export default function AddBookPage() {
   const router = useRouter();
 
@@ -25,7 +43,7 @@ export default function AddBookPage() {
   const [loading, setLoading] = useState(false);
 
   const [imageUrl, setImageUrl] = useState(
-    "https://i.postimg.cc/SR5rgwsk/images.jpg"
+    "https://i.postimg.cc/SR5rgwsk/images.jpg",
   );
 
   const [formData, setFormData] = useState({
@@ -48,7 +66,7 @@ export default function AddBookPage() {
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
 
@@ -64,7 +82,7 @@ export default function AddBookPage() {
 
     if (!user) {
       toast.error("Please login first.");
-      router.push("/login");
+      router.push("/login?redirect=/add-book");
       return;
     }
 
@@ -88,31 +106,23 @@ export default function AddBookPage() {
       return;
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiUrl) {
-      toast.error("Backend API URL is missing.");
-      return;
-    }
-
     try {
       setLoading(true);
 
-      const baseUrl = apiUrl.replace(/\/+$/, "");
+      // Get JWT authorization headers
+      const headers = await getAuthHeaders();
 
       // Prepare book data
+      // User identity will be taken from the verified JWT on the backend.
       const bookData = {
         ...formData,
         image: trimmedImageUrl,
-        addedByName: user.name || "BookNook User",
-        addedByEmail: user.email,
       };
 
       // Save book to MongoDB
-      const response = await axios.post(
-        `${baseUrl}/api/books`,
-        bookData
-      );
+      const response = await axios.post(`${baseUrl}/api/books`, bookData, {
+        headers,
+      });
 
       if (response.data?.success) {
         toast.success("Book added successfully!");
@@ -129,18 +139,22 @@ export default function AddBookPage() {
 
         router.refresh();
       } else {
-        throw new Error(
-          response.data?.message || "Failed to add book."
-        );
+        throw new Error(response.data?.message || "Failed to add book.");
       }
     } catch (error) {
       console.error("Add Book Error:", error);
+
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        toast.error("Your session has expired. Please login again.");
+        router.replace("/login?redirect=/add-book");
+        return;
+      }
 
       if (axios.isAxiosError(error)) {
         toast.error(
           error.response?.data?.message ||
             error.message ||
-            "Failed to add book."
+            "Failed to add book.",
         );
       } else if (error instanceof Error) {
         toast.error(error.message);
@@ -156,10 +170,7 @@ export default function AddBookPage() {
   if (isPending || !user) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2
-          className="animate-spin text-emerald-600"
-          size={36}
-        />
+        <Loader2 className="animate-spin text-emerald-600" size={36} />
       </div>
     );
   }
