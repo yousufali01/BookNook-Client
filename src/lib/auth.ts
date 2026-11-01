@@ -11,7 +11,7 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
 
   // Origin allowlist: same is used for the social login redirect origins
-  trustedOrigins: ["http://localhost:3000", "https://booknook-client.vercel.app"],
+  trustedOrigins: ["http://localhost:3000", "https://booknook-client-psi.vercel.app"],
 
   emailAndPassword: {
     enabled: true,

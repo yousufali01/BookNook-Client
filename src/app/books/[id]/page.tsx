@@ -16,6 +16,8 @@ import {
   BookMarked,
   X,
   CheckCircle,
+  Layers,
+  Ban,
 } from "lucide-react";
 
 type Book = {
@@ -25,6 +27,8 @@ type Book = {
   category: string;
   image: string;
   description: string;
+  totalCopies?: number;
+  availableCopies?: number;
   addedByName?: string;
   addedByEmail?: string;
   createdAt?: string;
@@ -104,9 +108,19 @@ function BookDetailsContent() {
 
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const [showBorrowModal, setShowBorrowModal] = useState(false);
   const [borrowing, setBorrowing] = useState(false);
+
+  // The backend uses totalCopies as the live stock counter
+  // (decremented on borrow, restored on return).
+  const availableStock =
+    book?.availableCopies !== undefined
+      ? book.availableCopies
+      : book?.totalCopies;
+
+  const notAvailable = availableStock !== undefined && availableStock <= 0;
 
   // Protect this page
   useEffect(() => {
@@ -119,32 +133,35 @@ function BookDetailsContent() {
   useEffect(() => {
     if (isPending || !user || !id) return;
 
-    let isActive = true;
-
-    const fetchBookDetails = async () => {
+    const fetchBookDetails = async (signal?: AbortSignal) => {
       try {
         const headers = await getAuthHeaders();
 
-        const response = await axios.get(`${baseUrl}/api/books/${id}`, {
+        const response = await axios.get(`${baseUrl}/books/${id}`, {
           headers,
+          signal,
         });
 
         const result = response.data;
 
-        const bookData =
-          result?.book ?? result?.data?.book ?? result?.data ?? result;
+        const bookData = result?.book ?? result?.data?.book ?? result?.data;
 
         if (!bookData || !bookData._id) {
           throw new Error("Book not found.");
         }
 
-        if (isActive) {
+        if (!signal?.aborted) {
           setBook(bookData);
         }
       } catch (error) {
-        console.error("Book Details Error:", error);
+        if (
+          axios.isCancel(error) ||
+          (axios.isAxiosError(error) && error.code === "ERR_CANCELED")
+        ) {
+          return;
+        }
 
-        if (!isActive) return;
+        console.error("Book Details Error:", error);
 
         if (axios.isAxiosError(error) && error.response?.status === 401) {
           toast.error("Your session has expired. Please login again.");
@@ -164,24 +181,41 @@ function BookDetailsContent() {
 
         setBook(null);
       } finally {
-        if (isActive) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
-    fetchBookDetails();
+    const controller = new AbortController();
+
+    fetchBookDetails(controller.signal);
 
     return () => {
-      isActive = false;
+      controller.abort();
     };
-  }, [id, user, isPending, router]);
+  }, [id, user, isPending, router, refreshKey]);
+
+  // Set a meaningful dynamic page title
+  useEffect(() => {
+    if (book?.title) {
+      const previousTitle = document.title;
+      document.title = `${book.title} | BookNook`;
+
+      return () => {
+        document.title = previousTitle;
+      };
+    }
+  }, [book]);
 
   // Open Borrow Modal
   const handleBorrow = () => {
     if (!user) {
       toast.error("Please login first.");
       router.push(`/login?redirect=/books/${id}`);
+      return;
+    }
+
+    if (notAvailable) {
+      toast.error("This book is not available for borrowing right now.");
       return;
     }
 
@@ -197,13 +231,19 @@ function BookDetailsContent() {
       return;
     }
 
+    if (notAvailable) {
+      toast.error("This book is not available for borrowing right now.");
+      setShowBorrowModal(false);
+      return;
+    }
+
     try {
       setBorrowing(true);
 
       const headers = await getAuthHeaders();
 
       const response = await axios.post(
-        `${baseUrl}/api/borrows`,
+        `${baseUrl}/borrows`,
         {
           bookId: book._id,
         },
@@ -213,6 +253,9 @@ function BookDetailsContent() {
       if (response.data?.success) {
         toast.success("Book borrowed successfully!");
         setShowBorrowModal(false);
+
+        // Refresh book data so the available copies stay accurate
+        setRefreshKey((key) => key + 1);
       } else {
         throw new Error(
           response.data?.message || "Failed to borrow this book.",
@@ -221,9 +264,27 @@ function BookDetailsContent() {
     } catch (error) {
       console.error("Borrow Book Error:", error);
 
+      // Duplicate borrow or 0 copies reported by the backend
+      const conflict =
+        axios.isAxiosError(error) &&
+        (error.response?.status === 409 ||
+          error.response?.status === 403 ||
+          error.response?.status === 400);
+
       if (axios.isAxiosError(error) && error.response?.status === 401) {
         toast.error("Your session has expired. Please login again.");
         router.replace(`/login?redirect=/books/${id}`);
+        return;
+      }
+
+      if (conflict) {
+        // Sync the local state with the real copies count
+        toast.error(
+          error.response?.data?.message ||
+            "You have already borrowed this book, or it is not available.",
+        );
+        setShowBorrowModal(false);
+        setRefreshKey((key) => key + 1);
         return;
       }
 
@@ -342,6 +403,21 @@ function BookDetailsContent() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-emerald-600">
+                        <Layers size={19} />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="text-xs text-slate-500">
+                          Available Copies
+                        </p>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {availableStock !== undefined ? availableStock : "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-emerald-600">
                         <UserRound size={19} />
                       </div>
 
@@ -384,13 +460,23 @@ function BookDetailsContent() {
                 </div>
 
                 {/* Borrow Button */}
-                <button
-                  onClick={handleBorrow}
-                  className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
-                >
-                  <BookOpen size={19} />
-                  Borrow This Book
-                </button>
+                {notAvailable ? (
+                  <button
+                    disabled
+                    className="mt-8 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-300 px-6 py-4 text-sm font-bold text-slate-500"
+                  >
+                    <Ban size={19} />
+                    Not Available
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleBorrow}
+                    className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
+                  >
+                    <BookOpen size={19} />
+                    Borrow This Book
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -441,6 +527,15 @@ function BookDetailsContent() {
                   <p className="mt-1 text-xs font-semibold text-emerald-700">
                     {book.category}
                   </p>
+
+                  {book.totalCopies !== undefined && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Available copies:{" "}
+                      <span className="font-bold text-slate-700">
+                        {availableStock}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
 

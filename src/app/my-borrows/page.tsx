@@ -90,6 +90,7 @@ export default function MyBorrowsPage() {
   const [borrows, setBorrows] = useState<Borrow[]>([]);
   const [loading, setLoading] = useState(true);
   const [returningId, setReturningId] = useState<string | null>(null);
+  const [returnTarget, setReturnTarget] = useState<Borrow | null>(null);
 
   // Redirect logged-out users
   useEffect(() => {
@@ -106,7 +107,7 @@ export default function MyBorrowsPage() {
       try {
         const headers = await getAuthHeaders();
 
-        const response = await axios.get(`${baseUrl}/api/borrows`, {
+        const response = await axios.get(`${baseUrl}/borrows`, {
           headers,
           signal,
         });
@@ -164,39 +165,28 @@ export default function MyBorrowsPage() {
       controller.abort();
     };
   }, [isPending, user, router]);
-  // Return Book
-  const handleReturnBook = async (borrowId: string) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to return this book?",
-    );
-
-    if (!confirmed) return;
+  // Return Book (custom modal confirms first)
+  const handleReturnBook = async () => {
+    if (!returnTarget) return;
 
     try {
-      setReturningId(borrowId);
+      setReturningId(returnTarget._id);
 
       const headers = await getAuthHeaders();
 
-      const response = await axios.put(
-        `${baseUrl}/api/borrows/${borrowId}/return`,
-        {},
+      // The backend deletes the borrow record and increases copies using $inc
+      const response = await axios.delete(
+        `${baseUrl}/borrows/${returnTarget._id}`,
         { headers },
       );
 
       if (response.data?.success) {
         setBorrows((previousBorrows) =>
-          previousBorrows.map((borrow) =>
-            borrow._id === borrowId
-              ? {
-                  ...borrow,
-                  isReturned: true,
-                  returnedAt: response.data?.data?.returnedAt || null,
-                }
-              : borrow,
-          ),
+          previousBorrows.filter((borrow) => borrow._id !== returnTarget._id),
         );
 
         toast.success("Book returned successfully!");
+        setReturnTarget(null);
       } else {
         throw new Error(
           response.data?.message || "Failed to return this book.",
@@ -239,8 +229,6 @@ export default function MyBorrowsPage() {
   }
 
   const activeBorrows = borrows.filter((borrow) => !borrow.isReturned);
-
-  const returnedBorrows = borrows.filter((borrow) => borrow.isReturned);
 
   return (
     <section className="min-h-screen bg-slate-50 px-4 py-12 sm:px-6 lg:px-8">
@@ -290,11 +278,11 @@ export default function MyBorrowsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">
-                  Returned Books
+                  Borrow Records
                 </p>
 
                 <h2 className="mt-2 text-3xl font-extrabold text-blue-700">
-                  {returnedBorrows.length}
+                  {borrows.length}
                 </h2>
               </div>
 
@@ -432,7 +420,7 @@ export default function MyBorrowsPage() {
                           </span>
                         ) : (
                           <button
-                            onClick={() => handleReturnBook(borrow._id)}
+                            onClick={() => setReturnTarget(borrow)}
                             disabled={returningId === borrow._id}
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
                           >
@@ -469,6 +457,67 @@ export default function MyBorrowsPage() {
           </p>
         </div>
       </div>
+
+      {/* Return Confirmation Modal */}
+      {returnTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center gap-5 px-1 py-3">
+              <img
+                src={returnTarget.bookImage}
+                alt={returnTarget.bookTitle}
+                className="h-20 w-16 rounded-lg border border-slate-200 object-cover"
+              />
+
+              <div className="min-w-0">
+                <p className="line-clamp-2 font-bold text-slate-900">
+                  {returnTarget.bookTitle}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Borrowed on {formatDate(returnTarget.borrowDate)}
+                </p>
+              </div>
+            </div>
+
+            <h2 className="text-center text-xl font-bold text-gray-900">
+              Return this book?
+            </h2>
+
+            <p className="mt-2 text-center text-sm leading-6 text-gray-500">
+              The borrow record will be removed and the copy will again become
+              available for other readers.
+            </p>
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row">
+              <button
+                onClick={() => setReturnTarget(null)}
+                disabled={returningId === returnTarget._id}
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-3 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleReturnBook}
+                disabled={returningId === returnTarget._id}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {returningId === returnTarget._id ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Returning...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw size={18} />
+                    Confirm Return
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

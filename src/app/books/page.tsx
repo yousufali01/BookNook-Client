@@ -31,6 +31,7 @@ export default function AllBooksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortOption, setSortOption] = useState("newest");
 
   /* Fetch books from the backend API */
   useEffect(() => {
@@ -43,7 +44,7 @@ export default function AllBooksPage() {
           setError("");
         }
 
-        const response = await fetch(`${API_BASE_URL}/api/books`);
+        const response = await fetch(`${API_BASE_URL}/books`);
 
         if (!response.ok) {
           throw new Error(`Books API failed: ${response.status}`);
@@ -78,20 +79,37 @@ export default function AllBooksPage() {
     };
   }, []);
 
-  /* Client-side filter */
-  const filteredBooks = books.filter((book) => {
-    const query = searchQuery.trim().toLowerCase();
+  /* Client-side filter + sort */
+  const filteredBooks = books
+    .filter((book) => {
+      const query = searchQuery.trim().toLowerCase();
 
-    if (!query) {
-      return true;
-    }
+      if (!query) {
+        return true;
+      }
 
-    return (
-      book.title?.toLowerCase().includes(query) ||
-      book.author?.toLowerCase().includes(query) ||
-      book.category?.toLowerCase().includes(query)
-    );
-  });
+      return (
+        book.title?.toLowerCase().includes(query) ||
+        book.author?.toLowerCase().includes(query) ||
+        book.category?.toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => {
+      if (sortOption === "oldest") {
+        return (a.createdAt || "").localeCompare(b.createdAt || "");
+      }
+
+      if (sortOption === "az") {
+        return (a.title || "").localeCompare(b.title || "");
+      }
+
+      if (sortOption === "za") {
+        return (b.title || "").localeCompare(a.title || "");
+      }
+
+      // Newest first (default order from the API)
+      return (b.createdAt || "").localeCompare(a.createdAt || "");
+    });
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-10 sm:px-6 lg:px-8">
@@ -133,10 +151,10 @@ export default function AllBooksPage() {
           </div>
         </div>
 
-        {/* Search */}
+        {/* Search + Sort */}
         {!loading && !error && books.length > 0 && (
-          <div className="mb-8">
-            <div className="relative max-w-md">
+          <div className="mb-8 flex flex-col gap-4 sm:flex-row">
+            <div className="relative max-w-md flex-1">
               <Search
                 size={18}
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -151,6 +169,18 @@ export default function AllBooksPage() {
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pl-11 text-sm outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
               />
             </div>
+
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+              aria-label="Sort books"
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 sm:w-auto"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="az">Title A-Z</option>
+              <option value="za">Title Z-A</option>
+            </select>
           </div>
         )}
 

@@ -251,6 +251,22 @@ function LoginForm() {
                     {errors.password.message}
                   </p>
                 )}
+
+                {/* Forgot Password (UI only) */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      toast(
+                        "Password reset is not available on BookNook yet. Please try again with the correct password.",
+                        { icon: "ℹ️", duration: 4000 },
+                      )
+                    }
+                    className="text-xs font-semibold text-slate-500 transition hover:text-emerald-700"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </div>
 
               {/* Submit Button */}

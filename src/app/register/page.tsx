@@ -35,6 +35,15 @@ const registerSchema = z
   .object({
     name: z.string().trim().min(2, "Name must be at least 2 characters."),
     email: z.string().trim().email("Enter a valid email address."),
+    photoUrl: z
+      .string()
+      .trim()
+      .url("Enter a valid photo URL (https://...).")
+      .refine((value) => value.startsWith("https://"), {
+        message: "Photo URL must start with https://",
+      })
+      .optional()
+      .or(z.literal("")),
     password: z
       .string()
       .min(6, "Password must be at least 6 characters.")
@@ -78,6 +87,7 @@ function RegisterForm() {
     defaultValues: {
       name: "",
       email: "",
+      photoUrl: "",
       password: "",
       confirmPassword: "",
     },
@@ -89,6 +99,7 @@ function RegisterForm() {
         name: values.name.trim(),
         email: values.email.trim(),
         password: values.password,
+        image: values.photoUrl?.trim() || undefined,
         callbackURL: redirectTo,
       });
 
@@ -101,7 +112,8 @@ function RegisterForm() {
 
       toast.success("Your BookNook account has been created!");
 
-      router.replace(redirectTo);
+      // Redirect to Login after successful email/password registration
+      router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
       router.refresh();
     } catch (error) {
       console.error("Registration error:", error);
@@ -260,6 +272,30 @@ function RegisterForm() {
                 {errors.email && (
                   <p className="text-xs font-medium text-red-600">
                     {errors.email.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Photo URL */}
+              <div className="space-y-2">
+                <Label htmlFor="photoUrl" className="text-slate-700">
+                  Photo URL{" "}
+                  <span className="font-normal text-slate-400">(optional)</span>
+                </Label>
+
+                <Input
+                  id="photoUrl"
+                  type="url"
+                  autoComplete="photo"
+                  placeholder="https://i.postimg.cc/your-photo.jpg"
+                  aria-invalid={!!errors.photoUrl}
+                  className="h-11 border-slate-200 focus-visible:ring-emerald-600"
+                  {...register("photoUrl")}
+                />
+
+                {errors.photoUrl && (
+                  <p className="text-xs font-medium text-red-600">
+                    {errors.photoUrl.message}
                   </p>
                 )}
               </div>

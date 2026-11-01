@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import axios from "axios";
@@ -12,6 +12,8 @@ import {
   UserRound,
   Mail,
   Link2,
+  Upload,
+  Layers,
 } from "lucide-react";
 
 const categories = ["Fiction", "Science", "History", "Kids", "Others"];
@@ -19,6 +21,8 @@ const categories = ["Fiction", "Science", "History", "Kids", "Others"];
 const baseUrl = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "");
+
+const imgbbApiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY || "";
 
 // Get JWT token from BetterAuth
 const getAuthHeaders = async () => {
@@ -41,10 +45,15 @@ export default function AddBookPage() {
   const { data: session, isPending } = authClient.useSession();
 
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const [totalCopies, setTotalCopies] = useState("1");
 
   const [imageUrl, setImageUrl] = useState(
     "https://i.postimg.cc/SR5rgwsk/images.jpg",
   );
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -76,6 +85,56 @@ export default function AddBookPage() {
     }));
   };
 
+  // Handle image upload to imgbb
+  const handleImageUpload = async (file: File) => {
+    if (!imgbbApiKey) {
+      toast.error(
+        "Image upload is not configured. Please paste an image URL instead.",
+      );
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file (JPG, PNG, WebP).");
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("Image must be smaller than 8MB.");
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await axios.post(
+        `https://api.imgbb.com/1/upload?key=${imgbbApiKey}`,
+        formData,
+      );
+
+      const uploadUrl = response.data?.data?.url;
+
+      if (!uploadUrl) {
+        throw new Error("Image upload failed.");
+      }
+
+      setImageUrl(uploadUrl);
+      toast.success("Image uploaded successfully!");
+    } catch (error) {
+      console.error("Image upload error:", error);
+      toast.error("Image upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   // Handle form submission
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -87,6 +146,7 @@ export default function AddBookPage() {
     }
 
     const trimmedImageUrl = imageUrl.trim();
+    const copies = Number(totalCopies);
 
     if (!trimmedImageUrl) {
       toast.error("Please enter a book image URL.");
@@ -106,6 +166,11 @@ export default function AddBookPage() {
       return;
     }
 
+    if (!Number.isInteger(copies) || copies < 1) {
+      toast.error("Total copies must be at least 1.");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -117,10 +182,11 @@ export default function AddBookPage() {
       const bookData = {
         ...formData,
         image: trimmedImageUrl,
+        totalCopies: copies,
       };
 
       // Save book to MongoDB
-      const response = await axios.post(`${baseUrl}/api/books`, bookData, {
+      const response = await axios.post(`${baseUrl}/books`, bookData, {
         headers,
       });
 
@@ -136,6 +202,7 @@ export default function AddBookPage() {
         });
 
         setImageUrl("");
+        setTotalCopies("1");
 
         router.refresh();
       } else {
@@ -269,12 +336,47 @@ export default function AddBookPage() {
 
             {/* Book Image URL */}
             <div>
-              <label
-                htmlFor="imageUrl"
-                className="mb-2 block text-sm font-semibold text-slate-700"
-              >
-                Book Image URL
-              </label>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label
+                  htmlFor="imageUrl"
+                  className="block text-sm font-semibold text-slate-700"
+                >
+                  Book Image
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || loading}
+                  className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={14} />
+                      Upload From Device
+                    </>
+                  )}
+                </button>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+
+                    if (file) {
+                      handleImageUpload(file);
+                    }
+                  }}
+                />
+              </div>
 
               <div className="relative">
                 <Link2
@@ -298,20 +400,64 @@ export default function AddBookPage() {
               </p>
 
               {/* Image Preview */}
-              {imageUrl.trim() && (
-                <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="mb-3 flex items-center gap-2 text-xs font-semibold text-emerald-700">
-                    <ImageIcon size={16} />
-                    Image Preview
-                  </p>
-
-                  <img
-                    src={imageUrl.trim()}
-                    alt="Book preview"
-                    className="mx-auto max-h-64 max-w-full rounded-xl object-contain"
+              {uploading ? (
+                <div className="mt-4 flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-xs font-semibold text-slate-500">
+                  <Loader2
+                    size={16}
+                    className="animate-spin text-emerald-600"
                   />
+                  Uploading image to imgbb...
                 </div>
+              ) : (
+                imageUrl.trim() && (
+                  <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="mb-3 flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                      <ImageIcon size={16} />
+                      Image Preview
+                    </p>
+
+                    <img
+                      src={imageUrl.trim()}
+                      alt="Book preview"
+                      className="mx-auto max-h-64 max-w-full rounded-xl object-contain"
+                    />
+                  </div>
+                )
               )}
+            </div>
+
+            {/* Total Copies */}
+            <div>
+              <label
+                htmlFor="totalCopies"
+                className="mb-2 block text-sm font-semibold text-slate-700"
+              >
+                Total Copies
+              </label>
+
+              <div className="relative">
+                <Layers
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                <input
+                  id="totalCopies"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={totalCopies}
+                  onChange={(e) => setTotalCopies(e.target.value)}
+                  placeholder="How many copies are available?"
+                  required
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-10 pr-4 text-sm outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <p className="mt-2 text-xs text-slate-400">
+                This number decreases when someone borrows the book and
+                increases when it is returned.
+              </p>
             </div>
 
             {/* Description */}

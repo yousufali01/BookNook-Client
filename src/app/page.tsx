@@ -107,7 +107,7 @@ export default function Home() {
         setLoading(true);
         setError("");
 
-        const response = await fetch(`${API_BASE_URL}/api/books?limit=6`);
+        const response = await fetch(`${API_BASE_URL}/books?limit=6`);
 
         if (!response.ok) {
           throw new Error(`Books API failed: ${response.status}`);

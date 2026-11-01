@@ -96,12 +96,23 @@ export default function MyBooksPage() {
 
         const headers = await getAuthHeaders();
 
-        const response = await axios.get(`${baseUrl}/api/my-books`, {
+        const response = await axios.get(`${baseUrl}/books`, {
           headers,
         });
 
         if (response.data?.success) {
-          setBooks(response.data.data || []);
+          // The backend has no dedicated "my books" endpoint (spec has only
+          // 8 endpoints), so filter the complete collection by the verified
+          // user's email from the active session.
+          const allBooks: Book[] = response.data.data || [];
+
+          setBooks(
+            allBooks.filter(
+              (book) =>
+                (book.addedByEmail || "")?.toLowerCase() ===
+                userEmail?.toLowerCase(),
+            ),
+          );
         } else {
           setBooks([]);
           toast.error(response.data?.message || "Could not load your books.");
@@ -179,8 +190,8 @@ export default function MyBooksPage() {
 
       const headers = await getAuthHeaders();
 
-      const response = await axios.put(
-        `${baseUrl}/api/books/${editingBook._id}`,
+      const response = await axios.patch(
+        `${baseUrl}/books/${editingBook._id}`,
         {
           title: editForm.title.trim(),
           author: editForm.author.trim(),
@@ -236,7 +247,7 @@ export default function MyBooksPage() {
       const headers = await getAuthHeaders();
 
       const response = await axios.delete(
-        `${baseUrl}/api/books/${deletingBook._id}`,
+        `${baseUrl}/books/${deletingBook._id}`,
         { headers },
       );
 
