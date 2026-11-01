@@ -38,17 +38,41 @@ const baseUrl = (
 function formatBookDate(dateString?: string) {
   if (!dateString) return "";
 
-  const date = new Date(dateString);
+  const datePart = dateString.split("T")[0];
+  const [year, month, day] = datePart.split("-");
 
-  if (Number.isNaN(date.getTime())) {
+  if (!year || !month || !day) {
     return "Date unavailable";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(date);
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  const monthIndex = Number(month) - 1;
+
+  if (
+    !Number.isInteger(monthIndex) ||
+    monthIndex < 0 ||
+    monthIndex > 11 ||
+    Number(day) < 1 ||
+    Number(day) > 31
+  ) {
+    return "Date unavailable";
+  }
+
+  return `${monthNames[monthIndex]} ${Number(day)}, ${year}`;
 }
 
 // Get JWT token from BetterAuth
@@ -68,10 +92,12 @@ const getAuthHeaders = async () => {
 
 // Main Book Details Content
 function BookDetailsContent() {
-  const params = useParams<{ id: string }>();
+  const params = useParams();
   const router = useRouter();
 
-  const id = params.id;
+  // Safely extract id
+  const rawId = params?.id;
+  const id = Array.isArray(rawId) ? rawId[0] : rawId || "";
 
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
@@ -84,7 +110,7 @@ function BookDetailsContent() {
 
   // Protect this page
   useEffect(() => {
-    if (!isPending && !user) {
+    if (!isPending && !user && id) {
       router.replace(`/login?redirect=/books/${id}`);
     }
   }, [isPending, user, router, id]);

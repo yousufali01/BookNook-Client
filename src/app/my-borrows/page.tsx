@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { authClient } from "@/lib/auth-client";
+
 import {
   BookOpen,
   CalendarDays,
@@ -46,21 +47,38 @@ const getAuthHeaders = async () => {
   };
 };
 
-// Format Date
-const formatDate = (dateString?: string) => {
+// Format Date without reading the current date during rendering
+const formatDate = (dateString?: string | null) => {
   if (!dateString) return "Not available";
 
-  const parsedDate = new Date(dateString);
+  const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
 
-  if (Number.isNaN(parsedDate.getTime())) {
+  if (!match) return "Not available";
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
     return "Not available";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(parsedDate);
+  return `${monthNames[month - 1]} ${day}, ${year}`;
 };
 
 export default function MyBorrowsPage() {
@@ -102,11 +120,14 @@ export default function MyBorrowsPage() {
           throw new Error("Invalid borrowing data received from server.");
         }
 
-        setBorrows(borrowData);
+        if (!signal?.aborted) {
+          setBorrows(borrowData);
+        }
       } catch (error) {
-        if (axios.isCancel(error)) return;
-
-        if (axios.isAxiosError(error) && error.code === "ERR_CANCELED") {
+        if (
+          axios.isCancel(error) ||
+          (axios.isAxiosError(error) && error.code === "ERR_CANCELED")
+        ) {
           return;
         }
 
@@ -149,7 +170,6 @@ export default function MyBorrowsPage() {
       controller.abort();
     };
   }, [isPending, user, fetchBorrows]);
-
   // Return Book
   const handleReturnBook = async (borrowId: string) => {
     const confirmed = window.confirm(
@@ -176,8 +196,7 @@ export default function MyBorrowsPage() {
               ? {
                   ...borrow,
                   isReturned: true,
-                  returnedAt:
-                    response.data?.data?.returnedAt || new Date().toISOString(),
+                  returnedAt: response.data?.data?.returnedAt || null,
                 }
               : borrow,
           ),
