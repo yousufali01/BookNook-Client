@@ -46,7 +46,9 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  const redirectTo = getSafeRedirect(searchParams.get("callbackURL"));
+  const redirectTo = getSafeRedirect(
+    searchParams.get("callbackURL") || searchParams.get("redirect"),
+  );
 
   const {
     register,

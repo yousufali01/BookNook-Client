@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination, Navigation } from "swiper/modules";
@@ -136,11 +136,22 @@ export default function Home() {
     <div className="min-h-screen bg-white text-slate-800">
       {/* =====================================
           HERO SLIDER
+          (wrapped in Suspense so the Swiper
+          library can stream safely on the server)
       ===================================== */}
 
-      <section className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl">
-          <Swiper
+      <Suspense
+        fallback={
+          <div className="relative overflow-hidden rounded-3xl">
+            <div className="flex min-h-[440px] items-center justify-center bg-slate-100 sm:min-h-[500px]">
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
+            </div>
+          </div>
+        }
+      >
+        <section className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <div className="relative overflow-hidden rounded-3xl">
+            <Swiper
             modules={[Autoplay, Pagination, Navigation]}
             slidesPerView={1}
             loop
@@ -195,8 +206,9 @@ export default function Home() {
               </SwiperSlide>
             ))}
           </Swiper>
-        </div>
-      </section>
+          </div>
+        </section>
+      </Suspense>
 
       {/* =====================================
           NEW ARRIVALS

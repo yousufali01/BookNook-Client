@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -99,10 +99,10 @@ export default function MyBorrowsPage() {
   }, [isPending, user, router]);
 
   // Fetch logged-in user's borrowed books
-  const fetchBorrows = useCallback(
-    async (signal?: AbortSignal) => {
-      if (!user) return;
+  useEffect(() => {
+    if (isPending || !user) return;
 
+    const fetchBorrows = async (signal?: AbortSignal) => {
       try {
         const headers = await getAuthHeaders();
 
@@ -154,13 +154,7 @@ export default function MyBorrowsPage() {
           setLoading(false);
         }
       }
-    },
-    [user, router],
-  );
-
-  // Load borrowing history
-  useEffect(() => {
-    if (isPending || !user) return;
+    };
 
     const controller = new AbortController();
 
@@ -169,7 +163,7 @@ export default function MyBorrowsPage() {
     return () => {
       controller.abort();
     };
-  }, [isPending, user, fetchBorrows]);
+  }, [isPending, user, router]);
   // Return Book
   const handleReturnBook = async (borrowId: string) => {
     const confirmed = window.confirm(
