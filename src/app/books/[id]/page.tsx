@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -34,6 +34,23 @@ const baseUrl = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "");
 
+// Format book date
+function formatBookDate(dateString?: string) {
+  if (!dateString) return "";
+
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Date unavailable";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
 // Get JWT token from BetterAuth
 const getAuthHeaders = async () => {
   const { data, error } = await authClient.token();
@@ -49,11 +66,12 @@ const getAuthHeaders = async () => {
   };
 };
 
-export default function BookDetailsPage() {
-  const params = useParams();
+// Main Book Details Content
+function BookDetailsContent() {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
 
-  const id = params.id as string;
+  const id = params.id;
 
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
@@ -75,10 +93,10 @@ export default function BookDetailsPage() {
   useEffect(() => {
     if (isPending || !user || !id) return;
 
+    let isActive = true;
+
     const fetchBookDetails = async () => {
       try {
-        setLoading(true);
-
         const headers = await getAuthHeaders();
 
         const response = await axios.get(`${baseUrl}/api/books/${id}`, {
@@ -94,9 +112,13 @@ export default function BookDetailsPage() {
           throw new Error("Book not found.");
         }
 
-        setBook(bookData);
+        if (isActive) {
+          setBook(bookData);
+        }
       } catch (error) {
         console.error("Book Details Error:", error);
+
+        if (!isActive) return;
 
         if (axios.isAxiosError(error) && error.response?.status === 401) {
           toast.error("Your session has expired. Please login again.");
@@ -116,11 +138,17 @@ export default function BookDetailsPage() {
 
         setBook(null);
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     };
 
     fetchBookDetails();
+
+    return () => {
+      isActive = false;
+    };
   }, [id, user, isPending, router]);
 
   // Open Borrow Modal
@@ -321,14 +349,7 @@ export default function BookDetailsPage() {
                         <div>
                           <p className="text-xs text-slate-500">Date Added</p>
                           <p className="text-sm font-semibold text-slate-800">
-                            {new Date(book.createdAt).toLocaleDateString(
-                              "en-US",
-                              {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              },
-                            )}
+                            {formatBookDate(book.createdAt)}
                           </p>
                         </div>
                       </div>
@@ -492,5 +513,23 @@ export default function BookDetailsPage() {
         </div>
       )}
     </>
+  );
+}
+
+// Suspense Wrapper
+export default function BookDetailsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[65vh] flex-col items-center justify-center">
+          <Loader2 size={38} className="animate-spin text-emerald-600" />
+          <p className="mt-4 text-sm font-medium text-slate-500">
+            Loading book details...
+          </p>
+        </div>
+      }
+    >
+      <BookDetailsContent />
+    </Suspense>
   );
 }

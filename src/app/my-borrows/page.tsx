@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -32,12 +31,13 @@ const baseUrl = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "");
 
+// Get JWT token from BetterAuth
 const getAuthHeaders = async () => {
   const { data, error } = await authClient.token();
 
   if (error || !data?.token) {
     throw new Error(
-      error?.message || "Authentication token not found. Please login again."
+      error?.message || "Authentication token not found. Please login again.",
     );
   }
 
@@ -46,20 +46,21 @@ const getAuthHeaders = async () => {
   };
 };
 
-const formatDate = (date?: string) => {
-  if (!date) return "Not available";
+// Format Date
+const formatDate = (dateString?: string) => {
+  if (!dateString) return "Not available";
 
-  const parsedDate = new Date(date);
+  const parsedDate = new Date(dateString);
 
   if (Number.isNaN(parsedDate.getTime())) {
     return "Not available";
   }
 
-  return parsedDate.toLocaleDateString("en-US", {
+  return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  }).format(parsedDate);
 };
 
 export default function MyBorrowsPage() {
@@ -80,65 +81,79 @@ export default function MyBorrowsPage() {
   }, [isPending, user, router]);
 
   // Fetch logged-in user's borrowed books
-  const fetchBorrows = useCallback(async () => {
-    if (!user) return;
+  const fetchBorrows = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!user) return;
 
-    try {
-      setLoading(true);
+      try {
+        const headers = await getAuthHeaders();
 
-      const headers = await getAuthHeaders();
+        const response = await axios.get(`${baseUrl}/api/borrows`, {
+          headers,
+          signal,
+        });
 
-      const response = await axios.get(`${baseUrl}/api/borrows`, {
-        headers,
-      });
+        const result = response.data;
 
-      const result = response.data;
+        const borrowData =
+          result?.data?.borrows ?? result?.data ?? result?.borrows ?? [];
 
-      const borrowData =
-        result?.data?.borrows ??
-        result?.data ??
-        result?.borrows ??
-        [];
+        if (!Array.isArray(borrowData)) {
+          throw new Error("Invalid borrowing data received from server.");
+        }
 
-      if (!Array.isArray(borrowData)) {
-        throw new Error("Invalid borrowing data received from server.");
+        setBorrows(borrowData);
+      } catch (error) {
+        if (axios.isCancel(error)) return;
+
+        if (axios.isAxiosError(error) && error.code === "ERR_CANCELED") {
+          return;
+        }
+
+        console.error("My Borrows Error:", error);
+
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+          toast.error("Your session has expired. Please login again.");
+          router.replace("/login?redirect=/my-borrows");
+          return;
+        }
+
+        if (axios.isAxiosError(error)) {
+          toast.error(
+            error.response?.data?.message ||
+              "Failed to load your borrowed books.",
+          );
+        } else if (error instanceof Error) {
+          toast.error(error.message);
+        } else {
+          toast.error("Something went wrong.");
+        }
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
       }
+    },
+    [user, router],
+  );
 
-      setBorrows(borrowData);
-    } catch (error) {
-      console.error("My Borrows Error:", error);
-
-      if (axios.isAxiosError(error) && error.response?.status === 401) {
-        toast.error("Your session has expired. Please login again.");
-        router.replace("/login?redirect=/my-borrows");
-        return;
-      }
-
-      if (axios.isAxiosError(error)) {
-        toast.error(
-          error.response?.data?.message ||
-            "Failed to load your borrowed books."
-        );
-      } else if (error instanceof Error) {
-        toast.error(error.message);
-      } else {
-        toast.error("Something went wrong.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [user, router]);
-
+  // Load borrowing history
   useEffect(() => {
-    if (!isPending && user) {
-      fetchBorrows();
-    }
+    if (isPending || !user) return;
+
+    const controller = new AbortController();
+
+    fetchBorrows(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
   }, [isPending, user, fetchBorrows]);
 
   // Return Book
   const handleReturnBook = async (borrowId: string) => {
     const confirmed = window.confirm(
-      "Are you sure you want to return this book?"
+      "Are you sure you want to return this book?",
     );
 
     if (!confirmed) return;
@@ -151,7 +166,7 @@ export default function MyBorrowsPage() {
       const response = await axios.put(
         `${baseUrl}/api/borrows/${borrowId}/return`,
         {},
-        { headers }
+        { headers },
       );
 
       if (response.data?.success) {
@@ -162,17 +177,16 @@ export default function MyBorrowsPage() {
                   ...borrow,
                   isReturned: true,
                   returnedAt:
-                    response.data?.data?.returnedAt ||
-                    new Date().toISOString(),
+                    response.data?.data?.returnedAt || new Date().toISOString(),
                 }
-              : borrow
-          )
+              : borrow,
+          ),
         );
 
         toast.success("Book returned successfully!");
       } else {
         throw new Error(
-          response.data?.message || "Failed to return this book."
+          response.data?.message || "Failed to return this book.",
         );
       }
     } catch (error) {
@@ -186,7 +200,7 @@ export default function MyBorrowsPage() {
 
       if (axios.isAxiosError(error)) {
         toast.error(
-          error.response?.data?.message || "Failed to return this book."
+          error.response?.data?.message || "Failed to return this book.",
         );
       } else if (error instanceof Error) {
         toast.error(error.message);
@@ -202,10 +216,8 @@ export default function MyBorrowsPage() {
   if (isPending || !user || loading) {
     return (
       <div className="flex min-h-[65vh] flex-col items-center justify-center">
-        <Loader2
-          size={40}
-          className="animate-spin text-emerald-600"
-        />
+        <Loader2 size={40} className="animate-spin text-emerald-600" />
+
         <p className="mt-4 text-sm font-medium text-slate-500">
           Loading your borrowed books...
         </p>
@@ -213,18 +225,13 @@ export default function MyBorrowsPage() {
     );
   }
 
-  const activeBorrows = borrows.filter(
-    (borrow) => !borrow.isReturned
-  );
+  const activeBorrows = borrows.filter((borrow) => !borrow.isReturned);
 
-  const returnedBorrows = borrows.filter(
-    (borrow) => borrow.isReturned
-  );
+  const returnedBorrows = borrows.filter((borrow) => borrow.isReturned);
 
   return (
     <section className="min-h-screen bg-slate-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-
         {/* Page Heading */}
         <div className="mb-10">
           <div className="flex items-center gap-3">
@@ -236,6 +243,7 @@ export default function MyBorrowsPage() {
               <h1 className="text-3xl font-extrabold text-slate-900">
                 My Borrows
               </h1>
+
               <p className="mt-1 text-sm text-slate-500">
                 Manage your borrowed books and return them on time.
               </p>
@@ -245,12 +253,14 @@ export default function MyBorrowsPage() {
 
         {/* Summary Cards */}
         <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-2">
+          {/* Currently Borrowed */}
           <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">
                   Currently Borrowed
                 </p>
+
                 <h2 className="mt-2 text-3xl font-extrabold text-emerald-700">
                   {activeBorrows.length}
                 </h2>
@@ -262,12 +272,14 @@ export default function MyBorrowsPage() {
             </div>
           </div>
 
+          {/* Returned Books */}
           <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">
                   Returned Books
                 </p>
+
                 <h2 className="mt-2 text-3xl font-extrabold text-blue-700">
                   {returnedBorrows.length}
                 </h2>
@@ -282,11 +294,13 @@ export default function MyBorrowsPage() {
 
         {/* Borrowed Books Table */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {/* Table Header */}
           <div className="flex flex-col gap-2 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-900">
                 Borrowing History
               </h2>
+
               <p className="mt-1 text-sm text-slate-500">
                 All books you have borrowed from BookNook.
               </p>
@@ -298,6 +312,7 @@ export default function MyBorrowsPage() {
           </div>
 
           {borrows.length === 0 ? (
+            /* Empty State */
             <div className="flex flex-col items-center justify-center px-5 py-16 text-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-slate-400">
                 <BookOpen size={38} />
@@ -320,6 +335,7 @@ export default function MyBorrowsPage() {
               </button>
             </div>
           ) : (
+            /* Borrowing History Table */
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] text-left">
                 <thead className="bg-slate-50">
@@ -351,6 +367,7 @@ export default function MyBorrowsPage() {
                             <p className="line-clamp-2 text-sm font-bold text-slate-800">
                               {borrow.bookTitle}
                             </p>
+
                             <p className="mt-1 text-xs text-slate-400">
                               BookNook Library
                             </p>
@@ -365,6 +382,7 @@ export default function MyBorrowsPage() {
                             size={16}
                             className="text-emerald-600"
                           />
+
                           {formatDate(borrow.borrowDate)}
                         </div>
                       </td>
@@ -372,10 +390,8 @@ export default function MyBorrowsPage() {
                       {/* Return Date */}
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Clock3
-                            size={16}
-                            className="text-emerald-600"
-                          />
+                          <Clock3 size={16} className="text-emerald-600" />
+
                           {formatDate(borrow.returnDate)}
                         </div>
                       </td>
@@ -409,10 +425,7 @@ export default function MyBorrowsPage() {
                           >
                             {returningId === borrow._id ? (
                               <>
-                                <Loader2
-                                  size={15}
-                                  className="animate-spin"
-                                />
+                                <Loader2 size={15} className="animate-spin" />
                                 Returning...
                               </>
                             ) : (
@@ -434,14 +447,12 @@ export default function MyBorrowsPage() {
 
         {/* Information */}
         <div className="mt-6 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
-          <Clock3
-            size={19}
-            className="mt-0.5 shrink-0 text-blue-600"
-          />
+          <Clock3 size={19} className="mt-0.5 shrink-0 text-blue-600" />
+
           <p className="text-xs leading-6 text-blue-800">
-            Please return borrowed books within the assigned return date.
-            Once a book is returned, its status will be updated in your
-            borrowing history.
+            Please return borrowed books within the assigned return date. Once a
+            book is returned, its status will be updated in your borrowing
+            history.
           </p>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 
 import Navbar from "@/components/layout/Navbar";
@@ -16,13 +17,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-800 antialiased">
-        <Navbar />
+        <Suspense fallback={<div className="h-20" />}>
+          <Navbar />
+        </Suspense>
 
         <main className="flex-1">{children}</main>
 
@@ -33,10 +34,7 @@ export default function RootLayout({
           reverseOrder={false}
           toastOptions={{
             duration: 3000,
-            style: {
-              borderRadius: "12px",
-              fontSize: "14px",
-            },
+            style: { borderRadius: "12px", fontSize: "14px" },
           }}
         />
       </body>
