@@ -115,10 +115,7 @@ function BookDetailsContent() {
 
   // The backend uses totalCopies as the live stock counter
   // (decremented on borrow, restored on return).
-  const availableStock =
-    book?.availableCopies !== undefined
-      ? book.availableCopies
-      : book?.totalCopies;
+  const availableStock = book?.availableCopies ?? 0;
 
   const notAvailable = availableStock !== undefined && availableStock <= 0;
 
