@@ -404,11 +404,9 @@ function BookDetailsContent() {
                       </div>
 
                       <div className="min-w-0">
-                        <p className="text-xs text-slate-500">
-                          Available Copies
-                        </p>
+                        <p className="text-xs text-slate-500">Total Copies</p>
                         <p className="text-sm font-semibold text-slate-800">
-                          {availableStock !== undefined ? availableStock : "—"}
+                          {book.totalCopies ?? 0}
                         </p>
                       </div>
                     </div>
