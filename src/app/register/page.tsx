@@ -113,7 +113,7 @@ function RegisterForm() {
       toast.success("Your BookNook account has been created!");
 
       // Redirect to Login after successful email/password registration
-      router.replace(`/login?redirect=${encodeURIComponent(redirectTo)}`);
+      router.replace(redirectTo || "/");
       router.refresh();
     } catch (error) {
       console.error("Registration error:", error);
